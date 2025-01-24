@@ -35,6 +35,11 @@ class User(BaseModel):
     email: str
     password: str
 
+class RegUser(BaseModel):
+    name: str
+    email: str
+    password: str
+
 class Topic(BaseModel):
     title: str
     content:str
@@ -245,8 +250,20 @@ async def login(user: User):
 
     # return {"message": "Login successful", "status_code": 200}
 
+@app.post("/register")
+async def register(user: RegUser):
+    db = await mongo_object()
+    user_collection = db["user"]
 
+    # Check if user already exists
+    if await user_collection.find_one({"email": user.email}):
+        raise HTTPException(status_code=400, detail="User already exists")
 
+    # Save the user to the database
+    result = await user_collection.insert_one(user.model_dump())
+    print(result)
+
+    return {"message": "User registered successfully", "status_code": 200}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
