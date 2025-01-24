@@ -157,91 +157,77 @@ async def generate_content(request: Request, params: InputParams):
     print("Generating content")
     db = await mongo_object()
     user_id = params.user_id
-    print(user_id, type(user_id))
+    if user_id:
+        print(user_id, type(user_id))
 
-    title, content = await generate_from_groq(params.model_dump())
-    
-    topics_collection = db["topics"]
+        title, content = await generate_from_groq(params.model_dump())
+        
+        topics_collection = db["topics"]
 
-    # Save the generated content to the database
-    topic = {
-        "title": title,
-        "content": content,
-    }
+        # Save the generated content to the database
+        topic = {
+            "title": title,
+            "content": content,
+        }
 
 
-    topic_with_user = TopicWithUser(user_id=user_id, topic=topic)
-    result = await topics_collection.insert_one(topic_with_user.dict())
-    print(result)
+        topic_with_user = TopicWithUser(user_id=user_id, topic=topic)
+        result = await topics_collection.insert_one(topic_with_user.model_dump())
+        print(result)
 
-    print("Generating stats...")
-    stats = await get_stats(topic)
+        print("Generating stats...")
+        stats = await get_stats(topic)
 
-    return PromptResponse(
-        title=title,
-        content=content,
-        words=stats[0],
-        seo_score=stats[1],
-        readability_score=stats[2],
-    )
+        return PromptResponse(
+            title=title,
+            content=content,
+            words=stats[0],
+            seo_score=stats[1],
+            readability_score=stats[2],
+        )
+    else:
+        return {"message": "User id not found"}
 
 
 
 @app.get("/topics/{user_id}")
 async def get_topics(user_id: str):
-    db = await mongo_object()
-    topics_collection = db["topics"]
+    if user_id:
 
-    # Find topics where user_id matches
-    cursor = topics_collection.find({"user_id": user_id}, {"topic.title": 1, "topic.content": 1})
-    topics = await cursor.to_list(length=None)
+        db = await mongo_object()
+        topics_collection = db["topics"]
 
-    # Convert _id to string if it’s in the returned documents
-    for t in topics:
-        if "_id" in t:
-            t["_id"] = str(t["_id"])
+        # Find topics where user_id matches
+        cursor = topics_collection.find({"user_id": user_id}, {"topic.title": 1, "topic.content": 1})
+        topics = await cursor.to_list(length=None)
 
-    return topics
+        # Convert _id to string if it’s in the returned documents
+        for t in topics:
+            if "_id" in t:
+                t["_id"] = str(t["_id"])
 
-# @app.get("/topics")
-# async def get_topics(request: Request):
+        return topics
+    else:
+        return {"message": "User id not found"}
+
+
+
+# @app.get("/topics/{topic_id}")
+# async def get_topic(topic_id: str):
 #     db = await mongo_object()
 #     topics_collection = db["topics"]
+#     topic = await topics_collection.find_one({"_id": topic_id})
 
-#     # Get user_id from the session
-#     user_id = request.cookies.get("user_id")
-#     print(user_id)
-#     if not user_id:
-#         raise HTTPException(status_code=401, detail="User not logged in")
+#     if topic is None:
+#         raise HTTPException(status_code=404, detail="Topic not found")
 
-#     # Find topics where user_id matches
-#     cursor = topics_collection.find({"user_id": user_id}, {"title": 1, "content": 1})
-#     topics = await cursor.to_list(length=None)
+#     # Convert _id to string
+#     topic["_id"] = str(topic["_id"])
 
-#     # Convert _id to string if it’s in the returned documents
-#     for t in topics:
-#         if "_id" in t:
-#             t["_id"] = str(t["_id"])
-
-#     return topics
-
-
-@app.get("/topics/{topic_id}")
-async def get_topic(topic_id: str):
-    db = await mongo_object()
-    topics_collection = db["topics"]
-    topic = await topics_collection.find_one({"_id": topic_id})
-
-    if topic is None:
-        raise HTTPException(status_code=404, detail="Topic not found")
-
-    # Convert _id to string
-    topic["_id"] = str(topic["_id"])
-
-    return PromptResponse(
-        title=topic["title"],
-        content=topic["content"],
-    )
+#     return PromptResponse(
+#         title=topic["title"],
+#         content=topic["content"],
+#     )
 
 @app.post("/login")
 async def login(user: User):
@@ -260,90 +246,7 @@ async def login(user: User):
     # return {"message": "Login successful", "status_code": 200}
 
 
-# @app.get("/login", response_class=HTMLResponse)
-# async def login_page():
-#     return """
-#     <html>
-#         <head>
-#             <title>Login</title>
-#         </head>
-#         <body>
-#             <h1>Login</h1>
-#             <form method="POST" action="/login">
-#                 <label for="email">Email:</label>
-#                 <input type="email" id="email" name="email" required>
-#                 <br>
-#                 <label for="password">Password:</label>
-#                 <input type="password" id="password" name="password" required>
-#                 <br>
-#                 <button type="submit">Login</button>
-#             </form>
-#         </body>
-#     </html>
-#     """
 
-
-# @app.post("/login")
-# async def login(
-#     email: str = Form(...), password: str = Form(...), response: Response = None
-# ):
-#     db = await mongo_object()
-#     user_collection = db["user"]
-
-#     # Validate user
-#     user_data = await user_collection.find_one({"email": email})
-#     if not user_data or user_data["password"] != password:
-#         raise HTTPException(status_code=401, detail="Invalid credentials")
-
-#     # Set a cookie or session
-#     response = RedirectResponse(url="http://192.168.137.1:5173/", status_code=302)
-#     response.set_cookie(key="session_id", value=str(user_data["_id"]))
-#     return response
-
-
-# @app.get("/register", response_class=HTMLResponse)
-# async def register_page():
-#     return """
-#     <html>
-#         <head>
-#             <title>Register</title>
-#         </head>
-#         <body>
-#             <h1>Register</h1>
-#             <form method="POST" action="/register">
-#                 <label for="name">Name:</label>
-#                 <input type="text" id="name" name="name" required>
-#                 <br>
-#                 <label for="email">Email:</label>
-#                 <input type="email" id="email" name="email" required>
-#                 <br>
-#                 <label for="password">Password:</label>
-#                 <input type="password" id="password" name="password" required>
-#                 <br>
-#                 <button type="submit">Register</button>
-#             </form>
-#         </body>
-#     </html>
-#     """
-
-
-# @app.post("/register")
-# async def register(
-#     name: str = Form(...), email: str = Form(...), password: str = Form(...)
-# ):
-#     db = await mongo_object()
-#     user_collection = db["user"]
-
-#     # Check if user already exists
-#     existing_user = await user_collection.find_one({"email": email})
-#     if existing_user:
-#         raise HTTPException(status_code=400, detail="User already exists")
-
-#     # Save user to the database
-#     user = {"name": name, "email": email, "password": password}
-#     await user_collection.insert_one(user)
-
-#     return RedirectResponse(url="/login", status_code=302)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
