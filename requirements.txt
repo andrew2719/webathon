@@ -2,8 +2,7 @@
 # $ conda create --name <env> --file <this file>
 # platform: linux-64
 # created-by: conda 24.9.2
-_libgcc_mutex=0.1=main
-_openmp_mutex=5.1=1_gnu
+
 annotated-types=0.7.0=pypi_0
 anyio=4.8.0=pypi_0
 bcrypt=4.2.1=pypi_0
