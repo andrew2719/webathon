@@ -17,14 +17,14 @@ client = Groq(
 
 app = FastAPI()
 
-origins = [
-    "http://localhost:5173",
-    "http://43.204.12.176:5173"
-]
+# origins = [
+#     "http://localhost:5173",
+#     "http://43.204.12.176:5173"
+# ]
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
