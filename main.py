@@ -1,7 +1,6 @@
-from fastapi import FastAPI, Request, Form, HTTPException, Response
+from fastapi import FastAPI, Request, Form, HTTPException, Response, Cookie
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse
-
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -10,20 +9,22 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from groq import Groq
 
 
+
 client = Groq(
     api_key="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",
 )
 
 
-
-
-
 app = FastAPI()
 
+origins = [
+    "http://localhost:5173",
+    "http://192.168.137.121:5173"
+]
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
@@ -38,11 +39,16 @@ class Topic(BaseModel):
     title: str
     content:str
 
+class TopicWithUser(BaseModel):
+    user_id: str
+    topic: Topic
+
 class InputParams(BaseModel):
     topic: str
     tone: str
     length: int
     target_audience: str
+    user_id: str
 
 class PromptResponse(BaseModel):
     title: str
@@ -51,6 +57,8 @@ class PromptResponse(BaseModel):
     seo_score: Optional[float] = None
     readability_score: Optional[float] = None
 
+class InputString(BaseModel):
+    input_str: str
 
 
 async def mongo_object():
@@ -74,7 +82,6 @@ async def chat_completion(prompt):
         model="llama-3.3-70b-versatile",
     )
     return chat_completion.choices[0].message.content
-
 
 async def generate_from_groq(input_params):
     topic = input_params['topic']
@@ -146,10 +153,12 @@ async def get_stats(topic):
 
 # Routes
 @app.post("/generate")
-async def generate_content(params: InputParams):
-
+async def generate_content(request: Request, params: InputParams):
     print("Generating content")
     db = await mongo_object()
+    user_id = params.user_id
+    print(user_id, type(user_id))
+
     title, content = await generate_from_groq(params.model_dump())
     
     topics_collection = db["topics"]
@@ -160,12 +169,13 @@ async def generate_content(params: InputParams):
         "content": content,
     }
 
+
+    topic_with_user = TopicWithUser(user_id=user_id, topic=topic)
+    result = await topics_collection.insert_one(topic_with_user.dict())
+    print(result)
+
     print("Generating stats...")
-
     stats = await get_stats(topic)
-
-    result = await topics_collection.insert_one(topic)
-    topic["_id"] = str(result.inserted_id)
 
     return PromptResponse(
         title=title,
@@ -175,12 +185,15 @@ async def generate_content(params: InputParams):
         readability_score=stats[2],
     )
 
-@app.get("/topics")
-async def get_topics():
+
+
+@app.get("/topics/{user_id}")
+async def get_topics(user_id: str):
     db = await mongo_object()
     topics_collection = db["topics"]
-    # explicitly include _id (to convert it) or exclude it, depending on your needs
-    cursor = topics_collection.find({}, {"title": 1, "content": 1})  
+
+    # Find topics where user_id matches
+    cursor = topics_collection.find({"user_id": user_id}, {"topic.title": 1, "topic.content": 1})
     topics = await cursor.to_list(length=None)
 
     # Convert _id to string if it’s in the returned documents
@@ -189,6 +202,28 @@ async def get_topics():
             t["_id"] = str(t["_id"])
 
     return topics
+
+# @app.get("/topics")
+# async def get_topics(request: Request):
+#     db = await mongo_object()
+#     topics_collection = db["topics"]
+
+#     # Get user_id from the session
+#     user_id = request.cookies.get("user_id")
+#     print(user_id)
+#     if not user_id:
+#         raise HTTPException(status_code=401, detail="User not logged in")
+
+#     # Find topics where user_id matches
+#     cursor = topics_collection.find({"user_id": user_id}, {"title": 1, "content": 1})
+#     topics = await cursor.to_list(length=None)
+
+#     # Convert _id to string if it’s in the returned documents
+#     for t in topics:
+#         if "_id" in t:
+#             t["_id"] = str(t["_id"])
+
+#     return topics
 
 
 @app.get("/topics/{topic_id}")
@@ -213,12 +248,16 @@ async def login(user: User):
     db = await mongo_object()
     user_collection = db["user"]
 
-    # Validate user
+    # Validate user with database
     user_data = await user_collection.find_one({"email": user.email})
-    if not user_data or user_data["password"] != user.password:
+    if not user_data or user_data.get("password") != user.password:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    return {"message": "Login successful", "status_code": 200}
+    # get the _id
+    user_id = str(user_data["_id"])
+    return JSONResponse(content={"message": "Login successful", "user_id": user_id}, status_code=200)
+
+    # return {"message": "Login successful", "status_code": 200}
 
 
 # @app.get("/login", response_class=HTMLResponse)
