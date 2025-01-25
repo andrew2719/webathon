@@ -176,6 +176,7 @@ This project demonstrates a practical application of AI in automating content cr
         ]
         ```
 
+
 ### Usage
 
 1. **Register a new user** by sending a POST request to `/register` with the required username and password.
@@ -183,13 +184,38 @@ This project demonstrates a practical application of AI in automating content cr
 3. **Generate content** by sending a POST request to `/generate` with the desired input parameters.
 4. **manage content** Using `/topic` api . refer main.py code.
 
+## Sample codes for adjusting
+### Example Code
+1. **a sample Customizable prompt for the content generation using llama**
+    ```bash
+    def generate_content(topic, tone, length, target_audience):
+        prompt = (
+            f"Write a {tone} post on {topic} for {target_audience} in {length} words or less.\n"
+            "Title: <title>\nContent: <content>"
+        )
+        chat_completion = client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="llama-3.3-70b-versatile",
+        )
+        response = chat_completion.choices[0].message.content
+        title, content = None, None
+        for line in response.split('\n'):
+            if line.startswith("Title:"):
+                title = line[len("Title:"):].strip()
+            elif line.startswith("Content:"):
+                content = line[len("Content:"):].strip()
+        return title, content
+    ```
+
 ## Running the Backend
 
 1. **Install Dependencies**  
    Use the following command to install all the required dependencies from `requirements.txt`:
    ```bash
    pip install -r requirements.txt
+   ```
 
 2. **Run the main app**
     ```bash
     python3 main.py
+    ```
