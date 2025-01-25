@@ -55,6 +55,11 @@ class TopicWithUser(BaseModel):
     user_id: str
     topic: Topic
 
+class SaveTopic(BaseModel):
+    title: str
+    content: str
+    user_id: str
+
 class InputParams(BaseModel):
     topic: str
     tone: str
@@ -72,9 +77,7 @@ class PromptResponse(BaseModel):
 class InputString(BaseModel):
     input_str: str
 
-class RedditPost(BaseModel):
-    title: str
-    body: str
+
 
 async def mongo_object():
     MONGODB_URL = "mongodb+srv://andrewblaze2719:meIqpKVOHtbVsXuD@cluster0.qx2mh.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
@@ -164,48 +167,6 @@ async def get_stats(topic):
 
     return words, seo_score, readability_score
 
-def setup_driver():
-    # Path to ChromeDriver (adjust this to the path where ChromeDriver is installed on your EC2 instance)
-    chrome_driver_path = "/usr/local/bin/chromedriver"
-
-    # Chrome options
-    options = Options()
-    options.add_argument('--headless')  # Run in headless mode (no browser window)
-    options.add_argument('--no-sandbox')  # Bypass OS security model
-    options.add_argument('--disable-dev-shm-usage')  # Overcome limited resources
-    options.add_argument('--disable-gpu')  # Disable GPU for headless systems
-    options.add_argument('--window-size=1920x1080')  # Set window size for debugging/screenshots
-
-    # Set up WebDriver
-    service = Service(chrome_driver_path)
-    driver = webdriver.Chrome(service=service, options=options)
-    return driver
-
-# Synchronous Selenium task for autofilling Reddit
-def autofill_reddit(post: RedditPost):
-    try:
-        driver = setup_driver()
-
-        # Open Reddit's post creation page
-        driver.get("https://www.reddit.com/submit?type=TEXT")
-        asyncio.sleep(5)  # Wait for the page to load
-
-        # Autofill the title field
-        title_field = driver.find_element(By.TAG_NAME, "input")  # Locate the title input
-        title_field.send_keys(post.title)  # Fill the title
-
-        # Autofill the body field
-        body_field = driver.find_element(By.TAG_NAME, "textarea")  # Locate the body textarea
-        body_field.send_keys(post.body)  # Fill the body
-
-        # Keep the browser open for a few seconds to validate the autofill
-        asyncio.sleep(10)
-
-        # Quit the browser
-        driver.quit()
-        return "Reddit autofill completed successfully."
-    except Exception as e:
-        raise Exception(f"Error during Reddit autofill: {str(e)}")
 
 
 # Routes
@@ -245,6 +206,17 @@ async def generate_content(request: Request, params: InputParams):
     else:
         return {"message": "User id not found"}
 
+@app.post('/save')
+async def save_topic(topic: SaveTopic):
+    db = await mongo_object()
+    topics_collection = db["topics"]
+
+    # Save the topic to the database
+    topic_with_user = TopicWithUser(user_id=topic.user_id, topic=topic.model_dump())
+    result = await topics_collection.insert_one(topic_with_user.model_dump())
+    print(result)
+
+    return {"message": "Topic saved successfully", "status_code": 200}
 
 
 @app.get("/topics/{user_id}")
@@ -266,18 +238,6 @@ async def get_topics(user_id: str):
         return topics
     else:
         return {"message": "User id not found"}
-
-
-@app.post("/export")
-async def export_to_reddit(post: RedditPost):
-    # Run Selenium task in a thread pool to avoid blocking the event loop
-    loop = asyncio.get_event_loop()
-    with ThreadPoolExecutor() as pool:
-        try:
-            result = await loop.run_in_executor(pool, autofill_reddit, post)
-            return {"message": result}
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
 
 
