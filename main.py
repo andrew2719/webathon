@@ -26,7 +26,8 @@ app = FastAPI()
 
 origins = [
     "http://localhost:5173",
-    "http://43.204.142.176:5173"
+    "http://43.204.142.176:5173",
+    "http://65.1.111.106:5173",
 ]
 # Add CORS middleware
 app.add_middleware(
