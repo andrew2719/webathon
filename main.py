@@ -256,9 +256,10 @@ async def save_topic(topic: SaveTopic):
     return {"message": "Topic saved successfully", "status_code": 200}
 
 @app.post("/prompt")
-async def prompt(request: Request, prompt_input: PromptInput):
+async def prompt(prompt_input: PromptInput):
 
     db = await mongo_object()
+    print(prompt_input.model_dumps())
     
     title, content = await modifying_prompt(prompt_input)
     stats = await get_stats({"title": title, "content": content})
