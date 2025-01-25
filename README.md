@@ -189,3 +189,7 @@ This project demonstrates a practical application of AI in automating content cr
    Use the following command to install all the required dependencies from `requirements.txt`:
    ```bash
    pip install -r requirements.txt
+
+2. **Run the main app**
+    ```bash
+    python3 main.py
