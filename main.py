@@ -212,7 +212,10 @@ async def save_topic(topic: SaveTopic):
     topics_collection = db["topics"]
 
     # Save the topic to the database
-    topic_with_user = TopicWithUser(user_id=topic.user_id, topic=topic.model_dump())
+    user_id = topic.user_id
+    title = topic.title
+    content = topic.content
+    topic_with_user = TopicWithUser(user_id=topic.user_id, topic=Topic(title=title, content=content))
     result = await topics_collection.insert_one(topic_with_user.model_dump())
     print(result)
 
