@@ -67,6 +67,12 @@ class InputParams(BaseModel):
     target_audience: str
     user_id: str
 
+class PromptInput(BaseModel):
+    title: str
+    content: str
+    new_prompt: str
+    user_id: str
+
 class PromptResponse(BaseModel):
     title: str
     content: str
@@ -167,7 +173,35 @@ async def get_stats(topic):
 
     return words, seo_score, readability_score
 
+async def modifying_prompt(prompt_input: PromptInput):
+    prev_title = prompt_input["title"]
+    prev_content = prompt_input["content"]
+    new_prompt = prompt_input["content"]
 
+    prompt = (
+        f"Modify the following content based on the new prompt:\n\n"
+        f"Previous Title: {prev_title}\n"
+        f"Previous Content: {prev_content}\n\n"
+        f"New Prompt: {new_prompt}\n\n"
+        "Please provide the output in the following format:\n"
+        "Title: <title>\n"
+        "Content: <content>"
+    )
+
+    response_content = await chat_completion(prompt)
+
+    # Parse the title and content from the response
+    title = None
+    content = None
+
+    for line in response_content.split('\n'):
+        if line.startswith("Title:"):
+            title = line[len("Title:"):].strip()
+        elif line.startswith("Content:"):
+            content = line[len("Content:"):].strip()
+
+    return title, content
+    
 
 # Routes
 @app.post("/generate")
@@ -220,6 +254,35 @@ async def save_topic(topic: SaveTopic):
     print(result)
 
     return {"message": "Topic saved successfully", "status_code": 200}
+
+@app.post("/prompt")
+async def prompt(request: Request, prompt_input: PromptInput):
+
+    db = await mongo_object()
+    
+    title, content = await modifying_prompt(prompt_input)
+    stats = await get_stats({"title": title, "content": content})
+
+    topics_collection = db["topics"]
+
+    # Save the generated content to the database
+    topic = {
+        "title": title,
+        "content": content,
+    }
+
+    topic_with_user = TopicWithUser(user_id=prompt_input.user_id, topic=topic)
+    result = await topics_collection.insert_one(topic_with_user.model_dump())
+    print(result)
+    
+
+    return PromptResponse(
+        title=title,
+        content=content,
+        words=stats[0],
+        seo_score=stats[1],
+        readability_score=stats[2],
+    )
 
 
 @app.get("/topics/{user_id}")
